@@ -44,6 +44,7 @@ namespace UniversalColdWallet
                 ["SOL"] = new WalletInfo { Name = "Solana", DerivationPath = "m/44'/501'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.Generic },
                 ["USDT"] = new WalletInfo { Name = "Tether (ERC-20)", DerivationPath = "m/44'/60'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.Ethereum },
                 ["USDT_TRC20"] = new WalletInfo { Name = "Tether (TRC-20)", DerivationPath = "m/44'/195'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.Tron },
+                ["TRX_TRC20"] = new WalletInfo { Name = "TRON (TRX)", DerivationPath = "m/44'/195'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.Tron },
                 ["USDT_BEP20"] = new WalletInfo { Name = "Tether (BEP-20)", DerivationPath = "m/44'/60'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.BinanceSmartChain },
                 ["SHIB"] = new WalletInfo { Name = "Shiba Inu (ERC-20)", DerivationPath = "m/44'/60'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.Ethereum },
                 ["BNB_BSC"] = new WalletInfo { Name = "Binance Coin (BEP20)", DerivationPath = "m/44'/60'/0'/0", NetworkType = NetworkType.Mainnet, CoinType = CoinType.BinanceSmartChain },

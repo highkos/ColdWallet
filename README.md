@@ -114,3 +114,54 @@ Made with ❤️ by H. İlker KÖSELİ
 
 > "In code we trust, but passwords we must not forget!" - Ancient Crypto Proverb
 ```
+
+
+
+# Universal Cold Wallet v2.0
+
+Önemli kripto para birimleri için soğuk cüzdan (cold wallet) oluşturup yönetmenizi sağlayan .NET 9 tabanlı bir masaüstü uygulaması.
+
+## Genel Bakış
+
+Universal Cold Wallet, çeşitli kripto para birimleri için güvenli bir şekilde adres oluşturmanızı ve özel anahtarlarınızı yönetmenizi sağlar. Uygulama çevrimdışı olarak çalışır ve hassas verileriniz (özel anahtarlar, tohum cümleleri) şifreli olarak saklanır.
+
+## Yeni Özellikler (v2.0)
+
+Bu sürüm, önceki sürüme göre çeşitli iyileştirmeler ve yeni özellikler içerir:
+
+- **TRX (TRON) Coin Desteği**: TRON blockchain'inin yerel tokeni TRX için destek eklendi.
+- **Tüm Adreslerin Özel Anahtarlarını Görüntüleme**: Her kripto para birimi için oluşturulan 5 adresin tümünün özel anahtarlarını görüntüleme özelliği eklendi.
+- **USDT_TRC20 Özel Anahtar Gösterimi**: TRC20 token özel anahtarlarının doğru şekilde görüntülenmesi için hata düzeltmesi yapıldı.
+- **Gelişmiş Hata Yönetimi**: TRON tabanlı token ve adresler için hata yönetimi iyileştirildi.
+- **.NET 9 Uyumluluğu**: Codebase .NET 9'a yükseltildi, daha iyi performans ve güvenlik sağlanıyor.
+
+## Düzeltilen Hatalar
+
+- Özel anahtarların görüntülenmesinde yalnızca ilk adresin görüntülenmesi sorunu düzeltildi
+- USDT_TRC20 için özel anahtar görüntülemede oluşan "The input string 'TRC20' was not in a correct format" hatası çözüldü
+- Underscorelar içeren (örn: USDT_TRC20) coinlerin özel anahtarlarını görüntülerken oluşan ayrıştırma hataları düzeltildi
+- Tüm adresler için özel anahtar gösterme opsiyonu eklenerek kullanıcı deneyimi iyileştirildi
+
+## Desteklenen Kripto Para Birimleri
+
+- Bitcoin (BTC)
+- Ethereum (ETH)
+- Litecoin (LTC)
+- Bitcoin Cash (BCH)
+- Dogecoin (DOGE)
+- Cardano (ADA)
+- Solana (SOL)
+- Ripple (XRP)
+- Tether (USDT) - ERC-20, BEP-20, TRC-20 formatında
+- Shiba Inu (SHIB) - ERC-20 formatında
+- Binance Coin (BNB) - BEP-20 formatında
+- TRON (TRX) - TRC-20 formatında (YENİ!)
+
+## Özellikler
+
+- **Güvenli Adres Üretimi**: BIP-39, BIP-44 standartlarına göre HD (Hierarchical Deterministic) cüzdan üretimi
+- **Özel Anahtar Yönetimi**: Her kripto para birimi için güvenli özel anahtar oluşturma ve görüntüleme
+- **Çoklu Adres Desteği**: Her kripto para birimi için aynı tohum cümlesinden 5 adres türetme
+- **Gelişmiş Şifreleme**: AES-256 şifreleme ile cüzdan verilerinin güvenli saklanması
+- **Çevrimdışı İşlem**: İnternet bağlantısı gerekmeden cüzdan oluşturma ve özel anahtarları görüntüleme
+- **Bakiye Kontrolü**: İsteğe bağlı olarak çevrimiçi bakiye kontrolü yap

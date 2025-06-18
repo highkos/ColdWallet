@@ -3,6 +3,9 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
+using ColdWallet.AccountBalances;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 namespace UniversalColdWallet
 {
@@ -10,21 +13,33 @@ namespace UniversalColdWallet
     {
         private readonly HttpClient _httpClient;
         private readonly Dictionary<string, string> _apiKeys;
+        private readonly USDT_BSCCAccountBalance _usdtBSCBalance;
+        private readonly USDT_TRCAccountBalance _usdtTrcBalance;
+        private readonly ILogger<USDT_BSCCAccountBalance>? _logger;
 
-        public AccountBalance()
+        public AccountBalance(ILogger<USDT_BSCCAccountBalance>? logger = null)
         {
+            var factory = LoggerFactory.Create(builder =>
+            {
+                builder.AddConsole();
+                builder.SetMinimumLevel(LogLevel.Debug);
+            });
+
+            _logger = logger ?? factory.CreateLogger<USDT_BSCCAccountBalance>();
             _httpClient = new HttpClient();
             _apiKeys = new Dictionary<string, string>
             {
                 { "ETHERSCAN", Environment.GetEnvironmentVariable("ETHERSCAN_API_KEY") ?? "" },
-                // BSCScan API anahtarýný doðrudan string olarak kullan
                 { "BSCSCAN", "8IBNZTXZWPTR6V4S4AKJWA5BAMPXZU4IHI" },
                 { "BLOCKCYPHER", Environment.GetEnvironmentVariable("BLOCKCYPHER_API_KEY") ?? "" },
-                { "SOLSCAN", Environment.GetEnvironmentVariable("SOLSCAN_API_KEY") ?? "" }
+                { "TRONGRID", Environment.GetEnvironmentVariable("TRONGRID_API_KEY") ?? "0df1dc46-e032-43ff-8a15-c9e732b4afad" }
             };
-            
-            // HttpClient timeout süresini artýr
+
             _httpClient.Timeout = TimeSpan.FromSeconds(30);
+
+            // Initialize USDT balance checkers with logger
+            _usdtBSCBalance = new USDT_BSCCAccountBalance(_httpClient, _apiKeys["BSCSCAN"], _logger);
+            _usdtTrcBalance = new USDT_TRCAccountBalance(_httpClient);
         }
 
         public async Task<decimal> GetBalanceAsync(string coinSymbol, string address)
@@ -38,21 +53,16 @@ namespace UniversalColdWallet
                     case "BTC":
                         return await GetBitcoinBalanceAsync(address);
                     case "BSC":
-                    case "BNB":
-                    case "BNB_BSC": // Added support for BNB_BSC
+                    case "BNB_BSC":
                         return await GetBinanceSmartChainBalanceAsync(address);
-                    case "SOL":
-                        return await GetSolanaBalanceAsync(address);
-                    case "TRX":
-                        return await GetTronBalanceAsync(address);
-                    case "ADA":
-                        return await GetCardanoBalanceAsync(address);
-                    case "XRP":
-                        return await GetRippleBalanceAsync(address);
-                    case "DOGE":
-                        return await GetDogeBalanceAsync(address);
-                    case "LTC":
-                        return await GetLitecoinBalanceAsync(address);
+                    case "USDT":
+                    case "USDT_BEP20":
+                        return await GetUSDT_BSCBalanceAsync(address, "BSC");
+                    case "BSC_USDT":
+                    case "USDT_TRC":
+                    case "USDT_TRC20":
+                        return await GetUSDTTRC20BalanceAsync(address, "TRC20");
+                    case "TRON_USDT":
                     default:
                         throw new NotSupportedException($"Balance check for {coinSymbol} is not implemented yet.");
                 }
@@ -63,14 +73,55 @@ namespace UniversalColdWallet
             }
         }
 
+        private async Task<decimal> GetUSDT_BSCBalanceAsync(string address, string network = "BSC")
+        {
+            try
+            {
+                if (network.ToUpper() == "TRC20" || network.ToUpper() == "TRON")
+                {
+                    // Get USDT-TRC20 balance
+                    return await _usdtTrcBalance.GetBalanceAsync(address);
+                }
+                else
+                {
+                    // Get USDT-BSC balance by default
+                    return await _usdtBSCBalance.GetBalanceAsync(address);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error getting USDT balance on {network}: {ex.Message}", ex);
+            }
+        }
+        private async Task<decimal> GetUSDTTRC20BalanceAsync(string address, string network = "TRC20")
+        {
+            try
+            {
+                if (network.ToUpper() == "TRC20" || network.ToUpper() == "TRON")
+                {
+                    // Get USDT-TRC20 balance
+                    return await _usdtTrcBalance.GetBalanceAsync(address);
+                }
+                else
+                {
+                    // Get USDT-BSC balance by default
+                    return await _usdtBSCBalance.GetBalanceAsync(address);
+                }
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error getting USDT balance on {network}: {ex.Message}", ex);
+            }
+        }
+
         private async Task<decimal> GetEthereumBalanceAsync(string address)
         {
             var apiKey = _apiKeys["ETHERSCAN"];
             var url = $"https://api.etherscan.io/api?module=account&action=balance&address={address}&tag=latest&apikey={apiKey}";
-            
+
             var response = await _httpClient.GetStringAsync(url);
             var json = JObject.Parse(response);
-            
+
             if (json["status"]?.ToString() == "1")
             {
                 var balance = json["result"]?.ToString();
@@ -79,7 +130,7 @@ namespace UniversalColdWallet
                     return result / 1_000_000_000_000_000_000m; // Convert from Wei to ETH
                 }
             }
-            
+
             throw new Exception($"Failed to get ETH balance: {json["message"]}");
         }
 
@@ -90,16 +141,16 @@ namespace UniversalColdWallet
             {
                 url += $"?token={_apiKeys["BLOCKCYPHER"]}";
             }
-            
+
             var response = await _httpClient.GetStringAsync(url);
             var json = JObject.Parse(response);
-            
+
             var balance = json["final_balance"]?.ToString();
             if (decimal.TryParse(balance, out decimal result))
             {
                 return result / 100_000_000m; // Convert from Satoshi to BTC
             }
-            
+
             throw new Exception("Failed to get BTC balance");
         }
 
@@ -108,35 +159,25 @@ namespace UniversalColdWallet
             try
             {
                 var apiKey = _apiKeys["BSCSCAN"];
-                // API URL'sini düzelt ve gerekli parametreleri ekle
-                var url = $"https://api.bscscan.com/api" +
-                         $"?module=account" +
-                         $"&action=balance" +
-                         $"&address={address}" +
-                         $"&tag=latest" +
-                         $"&apikey={apiKey}";
+                var url = $"https://api.bscscan.com/api?module=account&action=balance&address={address}&tag=latest&apikey={apiKey}";
 
-                // HttpClient'ý temiz bir state ile kullan
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
                 _httpClient.DefaultRequestHeaders.Add("User-Agent", "Universal Cold Wallet");
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
 
-                // API yanýt detaylarýný logla
                 Console.WriteLine($"BSCScan API Response: {response}");
-                
+
                 var status = json["status"]?.ToString();
                 var message = json["message"]?.ToString();
                 var result = json["result"]?.ToString();
 
-                // Status kontrolü
                 if (status == "1")
                 {
                     if (decimal.TryParse(result, out decimal balance))
                     {
-                        // Wei'den BNB'ye çevir (18 decimal)
                         var bnbBalance = balance / 1_000_000_000_000_000_000m;
                         Console.WriteLine($"BNB Balance: {bnbBalance} BNB (Raw: {balance} Wei)");
                         return bnbBalance;
@@ -145,7 +186,6 @@ namespace UniversalColdWallet
                 }
                 else if (status == "0")
                 {
-                    // API özel hata durumlarý
                     if (message?.ToLower().Contains("invalid api key") == true)
                     {
                         throw new Exception("Invalid BSCScan API key");
@@ -155,8 +195,7 @@ namespace UniversalColdWallet
                         throw new Exception("BSCScan API rate limit exceeded");
                     }
                 }
-                
-                // Genel hata durumu
+
                 throw new Exception($"BSCScan API error - Status: {status}, Message: {message ?? "No message"}, Result: {result ?? "No result"}");
             }
             catch (HttpRequestException ex)
@@ -165,8 +204,7 @@ namespace UniversalColdWallet
             }
             catch (Exception ex) when (ex.Message.Contains("rate limit"))
             {
-                // Rate limit durumunda biraz bekleyip tekrar dene
-                await Task.Delay(2000); // 2 saniye bekle
+                await Task.Delay(2000);
                 return await GetBinanceSmartChainBalanceAsync(address);
             }
             catch (Exception ex)
@@ -174,7 +212,6 @@ namespace UniversalColdWallet
                 throw new Exception($"Error processing BNB balance: {ex.Message}", ex);
             }
         }
-
         private async Task<decimal> GetSolanaBalanceAsync(string address)
         {
             try
@@ -182,16 +219,16 @@ namespace UniversalColdWallet
                 var url = $"https://public-api.solscan.io/account/{address}";
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var lamports = json["lamports"]?.ToString();
                 if (decimal.TryParse(lamports, out decimal balance))
                 {
                     return balance / 1_000_000_000m; // Convert from Lamports to SOL
                 }
-                
+
                 throw new Exception($"Invalid SOL balance format: {lamports}");
             }
             catch (Exception ex)
@@ -207,16 +244,16 @@ namespace UniversalColdWallet
                 var url = $"https://apilist.tronscan.org/api/account?address={address}";
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var balance = json["balance"]?.ToString();
                 if (decimal.TryParse(balance, out decimal result))
                 {
                     return result / 1_000_000m; // Convert from Sun to TRX
                 }
-                
+
                 throw new Exception($"Invalid TRX balance format: {balance}");
             }
             catch (Exception ex)
@@ -232,16 +269,16 @@ namespace UniversalColdWallet
                 var url = $"https://api.xrpscan.com/api/v1/account/{address}";
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("Accept", "application/json");
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var balance = json["xrpBalance"]?.ToString();
                 if (decimal.TryParse(balance, out decimal result))
                 {
                     return result;
                 }
-                
+
                 throw new Exception($"Invalid XRP balance format: {balance}");
             }
             catch (Exception ex)
@@ -257,16 +294,16 @@ namespace UniversalColdWallet
                 var url = $"https://cardano-mainnet.blockfrost.io/api/v0/addresses/{address}";
                 _httpClient.DefaultRequestHeaders.Clear();
                 _httpClient.DefaultRequestHeaders.Add("project_id", _apiKeys["BLOCKFROST"]);
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var amount = json["amount"]?[0]?["quantity"]?.ToString();
                 if (decimal.TryParse(amount, out decimal balance))
                 {
                     return balance / 1_000_000m; // Convert from Lovelace to ADA
                 }
-                
+
                 throw new Exception($"Invalid ADA balance format: {amount}");
             }
             catch (Exception ex)
@@ -284,16 +321,16 @@ namespace UniversalColdWallet
                 {
                     url += $"?token={_apiKeys["BLOCKCYPHER"]}";
                 }
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var balance = json["final_balance"]?.ToString();
                 if (decimal.TryParse(balance, out decimal result))
                 {
                     return result / 100_000_000m; // Convert from Koinu to DOGE
                 }
-                
+
                 throw new Exception($"Invalid DOGE balance format: {balance}");
             }
             catch (Exception ex)
@@ -311,16 +348,16 @@ namespace UniversalColdWallet
                 {
                     url += $"?token={_apiKeys["BLOCKCYPHER"]}";
                 }
-                
+
                 var response = await _httpClient.GetStringAsync(url);
                 var json = JObject.Parse(response);
-                
+
                 var balance = json["final_balance"]?.ToString();
                 if (decimal.TryParse(balance, out decimal result))
                 {
                     return result / 100_000_000m; // Convert from Litoshi to LTC
                 }
-                
+
                 throw new Exception($"Invalid LTC balance format: {balance}");
             }
             catch (Exception ex)
@@ -328,6 +365,7 @@ namespace UniversalColdWallet
                 throw new Exception($"Error getting LTC balance: {ex.Message}", ex);
             }
         }
+
 
         public async Task UpdateWalletBalancesAsync(UniversalColdWallet wallet)
         {

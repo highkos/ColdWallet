@@ -2,6 +2,8 @@ using NBitcoin;
 using NBitcoin.Altcoins;
 using Nethereum.HdWallet;
 using Nethereum.Web3.Accounts;
+using Nethereum.Signer;
+using Nethereum.Util;
 using Newtonsoft.Json;
 using System;
 using System.Buffers.Binary;
@@ -10,9 +12,92 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace UniversalColdWallet
 {
+    /// <summary>
+    /// Utility class for generating and verifying TRON addresses
+    /// </summary>
+    public class TronAddressGenerator
+    {
+        /// <summary>
+        /// Generates a TRON address from a public key
+        /// </summary>
+        /// <param name="publicKey">The public key in byte array format</param>
+        /// <returns>TRON address in Base58 format</returns>
+        public static string GenerateTronAddress(byte[] publicKey)
+        {
+            // If public key starts with 0x04 (uncompressed), remove the prefix
+            byte[] pubKeyRaw = publicKey[0] == 4 ? publicKey.Skip(1).ToArray() : publicKey;
+
+            // Calculate Keccak256 hash
+            var keccak = new Sha3Keccack();
+            byte[] hash = keccak.CalculateHash(pubKeyRaw);
+
+            // Take last 20 bytes (Ethereum address format)
+            byte[] addressBytes = hash.Skip(12).ToArray();
+
+            // Add TRON address prefix (0x41)
+            byte[] tronAddress = new byte[21];
+            tronAddress[0] = 0x41;
+            Buffer.BlockCopy(addressBytes, 0, tronAddress, 1, 20);
+
+            // Calculate checksum (double SHA256)
+            byte[] checksum = CalculateDoubleSha256(tronAddress);
+            byte[] checksumBytes = checksum.Take(4).ToArray();
+
+            // Combine address and checksum
+            byte[] finalBytes = new byte[25];
+            Buffer.BlockCopy(tronAddress, 0, finalBytes, 0, 21);
+            Buffer.BlockCopy(checksumBytes, 0, finalBytes, 21, 4);
+
+            // Base58 encode the result
+            return SimpleBase.Base58.Bitcoin.Encode(finalBytes);
+        }
+
+        /// <summary>
+        /// Generates a TRON address from a private key hex string
+        /// </summary>
+        /// <param name="privateKeyHex">Private key in hex format (64 characters)</param>
+        /// <returns>TRON address in base58 format</returns>
+        public static string GenerateTronAddressFromPrivateKey(string privateKeyHex)
+        {
+            // Create EthECKey from private key
+            var ecKey = new EthECKey(privateKeyHex);
+            
+            // Get the public key bytes
+            byte[] publicKey = ecKey.GetPubKey();
+            
+            // Generate TRON address from public key
+            return GenerateTronAddress(publicKey);
+        }
+
+        /// <summary>
+        /// Calculates double SHA-256 hash (applies SHA-256 twice)
+        /// </summary>
+        /// <param name="data">Input data to hash</param>
+        /// <returns>32-byte double SHA-256 hash</returns>
+        private static byte[] CalculateDoubleSha256(byte[] data)
+        {
+            using (SHA256 sha256 = SHA256.Create())
+            {
+                byte[] firstHash = sha256.ComputeHash(data);
+                return sha256.ComputeHash(firstHash);
+            }
+        }
+    }
+
+    // Implementing Sha3Keccack using Nethereum's Keccak implementation
+    public class Sha3Keccack
+    {
+        public byte[] CalculateHash(byte[] input)
+        {
+            // Use Nethereum's implementation of Keccak256
+            return new Nethereum.Util.Sha3Keccack().CalculateHash(input);
+        }
+    }
+
     public class UniversalColdWallet
     {
         private readonly string _mnemonic;
@@ -162,74 +247,21 @@ namespace UniversalColdWallet
 
         private string GenerateTronAddress(string derivationPath, int accountIndex)
         {
+            // Get the private key for TRON
+            string privateKeyHex = GetPrivateKeyHex(derivationPath, accountIndex);
+
+            // Generate the TRON address from the private key
+            return TronAddressGenerator.GenerateTronAddressFromPrivateKey(privateKeyHex);
+        }
+        
+        // Helper method to get a raw private key hex string from derivation path
+        private string GetPrivateKeyHex(string derivationPath, int accountIndex)
+        {
             var mnemonic = new Mnemonic(_mnemonic);
             var hdRoot = mnemonic.DeriveExtKey();
             var keyPath = new NBitcoin.KeyPath(derivationPath + "/" + accountIndex);
             var derivedKey = hdRoot.Derive(keyPath);
-
-            // Ethereum secp256k1 public key
-            var publicKey = derivedKey.PrivateKey.PubKey.ToBytes(true);
-            var keyBytes = new byte[publicKey.Length - 1];
-            Array.Copy(publicKey, 1, keyBytes, 0, keyBytes.Length);
-
-            // SHA256 hash (normalde Keccak-256 kullanılmalı)
-            using var sha256 = SHA256.Create();
-            var hash = sha256.ComputeHash(keyBytes);
-            
-            // Son 20 byte'ı al
-            var addressBytes = new byte[21];
-            addressBytes[0] = 0x41; // TRON adres versiyonu
-            Array.Copy(hash, hash.Length - 20, addressBytes, 1, 20);
-            
-            // Double SHA256 checksum
-            var firstSha = sha256.ComputeHash(addressBytes);
-            var secondSha = sha256.ComputeHash(firstSha);
-            
-            // Son adres: 21 byte adres + 4 byte checksum
-            var finalBytes = new byte[25];
-            Array.Copy(addressBytes, 0, finalBytes, 0, 21);
-            Array.Copy(secondSha, 0, finalBytes, 21, 4);
-            
-            // Base58 encoding
-            const string ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-            var result = new StringBuilder();
-            
-            // BigInteger'a çevir
-            var bigInt = System.Numerics.BigInteger.Zero;
-            for (int i = 0; i < finalBytes.Length; i++)
-            {
-                bigInt = (bigInt * 256) + finalBytes[i];
-            }
-            
-            // Base58'e çevir
-            while (bigInt > 0)
-            {
-                var remainder = (int)(bigInt % 58);
-                bigInt /= 58;
-                result.Insert(0, ALPHABET[remainder]);
-            }
-            
-            // Leading zeros için gerekli karakterleri ekle
-            for (int i = 0; i < finalBytes.Length && finalBytes[i] == 0; i++)
-            {
-                result.Insert(0, ALPHABET[0]);
-            }
-            
-            var address = result.ToString();
-            
-            // Format kontrolü
-            if (address.Length != 34)
-            {
-                throw new InvalidOperationException($"Invalid TRON address length: {address.Length}. Expected: 34");
-            }
-            
-            // T ile başlama kontrolü
-            if (!address.StartsWith("T"))
-            {
-                throw new InvalidOperationException("TRON address must start with 'T'");
-            }
-            
-            return address;
+            return derivedKey.PrivateKey.ToHex();
         }
 
         private string GenerateEthereumAddress(string derivationPath, int accountIndex)
@@ -475,6 +507,10 @@ namespace UniversalColdWallet
                     var bscAccount = bscWallet.GetAccount(accountIndex);
                     return bscAccount.PrivateKey;
 
+                case "USDT_TRC20":
+                    // For TRC20, we need to derive the key and ensure it matches the address format
+                    return derivedKey.PrivateKey.ToHex(); // Return just the hex without 0x prefix
+                
                 case "BTC":
                 case "LTC":
                 case "BCH":
@@ -482,7 +518,6 @@ namespace UniversalColdWallet
                 case "XRP":
                 case "ADA":
                 case "SOL":
-                case "USDT_TRC20":
                 default:
                     // Tüm coinler için hex formatında private key döndür
                     return derivedKey.PrivateKey.ToHex();
