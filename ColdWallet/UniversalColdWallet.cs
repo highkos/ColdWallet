@@ -533,8 +533,12 @@ namespace UniversalColdWallet
             }
 
             var addresses = new Dictionary<string, List<AddressInfo>>();
-
-            foreach (var coinSymbol in _supportedCoins.GetAllSymbols())
+            
+            // Get all supported coins in their original order from SupportedCoins
+            var supportedSymbols = _supportedCoins.GetAllSymbols();
+            
+            // Add all addresses to the dictionary maintaining the order from SupportedCoins
+            foreach (var coinSymbol in supportedSymbols)
             {
                 var coinInfo = _supportedCoins.GetCoinInfo(coinSymbol);
                 var coinAddresses = new List<AddressInfo>();
@@ -565,7 +569,7 @@ namespace UniversalColdWallet
                 Mnemonic = _mnemonic,
                 CreatedAt = DateTime.UtcNow,
                 Addresses = addresses,
-                SupportedCoins = _supportedCoins.GetAllSymbols().ToList()
+                SupportedCoins = supportedSymbols.ToList()
             };
 
             _currentExport.UpdateTotalBalances();
@@ -740,13 +744,35 @@ namespace UniversalColdWallet
             ArgumentException.ThrowIfNullOrEmpty(coinSymbol, nameof(coinSymbol));
 
             var export = ExportWallet();
-            if (export.Addresses == null || !export.Addresses.ContainsKey(coinSymbol))
+            
+            // Normalize coin symbol
+            var normalizedCoinSymbol = coinSymbol.ToUpper();
+            
+            // Special handling for TRX_TRC20 and TRX which should be treated the same
+            if (normalizedCoinSymbol == "TRX")
             {
-                throw new ArgumentException($"Coin bulunamadı: {coinSymbol}");
+                normalizedCoinSymbol = "TRX_TRC20";
+            }
+            
+            // Check if Addresses is null before accessing it
+            if (export.Addresses == null)
+            {
+                throw new InvalidOperationException("Addresses collection is null in wallet export");
+            }
+            
+            // Find the matching coin key in the Addresses dictionary
+            var matchingCoinKey = export.Addresses.Keys
+                .FirstOrDefault(k => k.Equals(normalizedCoinSymbol, StringComparison.OrdinalIgnoreCase));
+            
+            if (matchingCoinKey == null)
+            {
+                // More informative error message
+                var supportedCoins = string.Join(", ", export.Addresses.Keys);
+                throw new ArgumentException($"Coin bulunamadı: {coinSymbol}. Desteklenen coinler: {supportedCoins}");
             }
 
             // Adres ve bakiye güncellemesi
-            var addresses = export.Addresses[coinSymbol];
+            var addresses = export.Addresses[matchingCoinKey];
             var address = addresses.FirstOrDefault(a => a.Index == accountIndex);
 
             if (address == null)
@@ -754,7 +780,7 @@ namespace UniversalColdWallet
                 address = new AddressInfo
                 {
                     Index = accountIndex,
-                    Address = GenerateAddress(coinSymbol, accountIndex),
+                    Address = GenerateAddress(matchingCoinKey, accountIndex),
                     DerivationPath = $"m/44'/60'/0'/0/{accountIndex}"
                 };
                 addresses.Add(address);
@@ -837,10 +863,36 @@ namespace UniversalColdWallet
                     SaveToFile("cold_wallet.json");
                 }
 
+                // Define the order of coins for display
+                string[] coinOrder = new string[] 
+                { 
+                    "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL", 
+                    "USDT", "USDT_TRC20", "USDT_BEP20", "BNB_BSC", "TRX_TRC20",
+                    "SHIB", "XRP" 
+                };
+                
                 Console.WriteLine($"\nBakiyeler güncellendi:");
-                foreach (var coin in export.TotalBalances)
+                
+                // Create an ordered dictionary based on the defined order
+                var orderedBalances = new Dictionary<string, decimal>();
+                
+                // First add coins in our defined order
+                foreach (var coin in coinOrder)
                 {
-                    Console.WriteLine($"{coin.Key}: {coin.Value:N8}");
+                    if (export.TotalBalances.TryGetValue(coin, out decimal balance))
+                    {
+                        orderedBalances[coin] = balance;
+                        Console.WriteLine($"{coin}: {balance:N8}");
+                    }
+                }
+                
+                // Then add any remaining coins not in our predefined order
+                foreach (var balance in export.TotalBalances)
+                {
+                    if (!orderedBalances.ContainsKey(balance.Key))
+                    {
+                        Console.WriteLine($"{balance.Key}: {balance.Value:N8}");
+                    }
                 }
             }
         }
@@ -864,12 +916,32 @@ namespace UniversalColdWallet
             ArgumentException.ThrowIfNullOrEmpty(coinSymbol, nameof(coinSymbol));
 
             var export = ExportWallet();
-            if (export.Addresses == null || !export.Addresses.ContainsKey(coinSymbol))
+            
+            // Normalize coin symbol
+            var normalizedCoinSymbol = coinSymbol.ToUpper();
+            
+            // Special handling for TRX_TRC20 and TRX which should be treated the same
+            if (normalizedCoinSymbol == "TRX")
+            {
+                normalizedCoinSymbol = "TRX_TRC20";
+            }
+            
+            // Check if Addresses is null before accessing it
+            if (export.Addresses == null)
+            {
+                return 0;
+            }
+            
+            // Find the matching coin key in the Addresses dictionary
+            var matchingCoinKey = export.Addresses.Keys
+                .FirstOrDefault(k => k.Equals(normalizedCoinSymbol, StringComparison.OrdinalIgnoreCase));
+                
+            if (matchingCoinKey == null)
             {
                 return 0;
             }
 
-            var addresses = export.Addresses[coinSymbol];
+            var addresses = export.Addresses[matchingCoinKey];
             var address = addresses.FirstOrDefault(a => a.Index == accountIndex);
 
             return address?.Balance ?? 0;
@@ -880,12 +952,32 @@ namespace UniversalColdWallet
             ArgumentException.ThrowIfNullOrEmpty(coinSymbol, nameof(coinSymbol));
 
             var export = ExportWallet();
-            if (export.Addresses == null || !export.Addresses.ContainsKey(coinSymbol))
+            
+            // Normalize coin symbol
+            var normalizedCoinSymbol = coinSymbol.ToUpper();
+            
+            // Special handling for TRX_TRC20 and TRX which should be treated the same
+            if (normalizedCoinSymbol == "TRX")
+            {
+                normalizedCoinSymbol = "TRX_TRC20";
+            }
+            
+            // Check if Addresses is null before accessing it
+            if (export.Addresses == null)
+            {
+                return null;
+            }
+            
+            // Find the matching coin key in the Addresses dictionary
+            var matchingCoinKey = export.Addresses.Keys
+                .FirstOrDefault(k => k.Equals(normalizedCoinSymbol, StringComparison.OrdinalIgnoreCase));
+                
+            if (matchingCoinKey == null)
             {
                 return null;
             }
 
-            var addresses = export.Addresses[coinSymbol];
+            var addresses = export.Addresses[matchingCoinKey];
             var address = addresses.FirstOrDefault(a => a.Index == accountIndex);
 
             return address?.LastBalanceUpdate;

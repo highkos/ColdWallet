@@ -337,9 +337,40 @@ namespace UniversalColdWallet
                 
                 if (export.TotalBalances?.Count > 0)
                 {
+                    // Define the order of coins for display
+                    string[] coinOrder = new string[] 
+                    { 
+                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL", 
+                        "USDT", "USDT_TRC20", "TRX_TRC20", "USDT_BEP20", "BNB_BSC",
+                        "SHIB", "XRP" 
+                    };
+                    
                     Console.WriteLine("\nToplam Bakiyeler:");
                     Console.WriteLine("================");
+                    
+                    // Create an ordered dictionary based on the defined order
+                    var orderedBalances = new Dictionary<string, decimal>();
+                    
+                    // First add coins in our defined order
+                    foreach (var coin in coinOrder)
+                    {
+                        if (export.TotalBalances.TryGetValue(coin, out decimal balance))
+                        {
+                            orderedBalances[coin] = balance;
+                        }
+                    }
+                    
+                    // Then add any remaining coins not in our predefined order
                     foreach (var balance in export.TotalBalances)
+                    {
+                        if (!orderedBalances.ContainsKey(balance.Key))
+                        {
+                            orderedBalances[balance.Key] = balance.Value;
+                        }
+                    }
+                    
+                    // Display the balances in the ordered dictionary
+                    foreach (var balance in orderedBalances)
                     {
                         Console.WriteLine($"{balance.Key,-10}: {balance.Value,15:N8}");
                     }
@@ -350,9 +381,41 @@ namespace UniversalColdWallet
 
                 if (export.Addresses != null)
                 {
+                    // Use the same coin order for displaying addresses
+                    string[] coinOrder = new string[] 
+                    { 
+                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL", 
+                        "USDT", "USDT_TRC20", "TRX_TRC20", "USDT_BEP20", "BNB_BSC",
+                        "SHIB", "XRP" 
+                    };
+
+                    // First display the coins in our defined order
+                    foreach (var coinSymbol in coinOrder)
+                    {
+                        if (export.Addresses.TryGetValue(coinSymbol, out var addresses) && addresses != null)
+                        {
+                            Console.WriteLine($"\n{coinSymbol} Adresleri ve Bakiyeleri:");
+                            foreach (var address in addresses)
+                            {
+                                if (address != null)
+                                {
+                                    Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
+                                    Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                                    Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
+                                    
+                                    if (address.LastBalanceUpdate.HasValue)
+                                    {
+                                        Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    // Then display any remaining coins not in our predefined order
                     foreach (var coin in export.Addresses)
                     {
-                        if (coin.Value != null)
+                        if (!coinOrder.Contains(coin.Key) && coin.Value != null)
                         {
                             Console.WriteLine($"\n{coin.Key} Adresleri ve Bakiyeleri:");
                             foreach (var address in coin.Value)

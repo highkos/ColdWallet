@@ -50,10 +50,10 @@ namespace UniversalColdWallet
             {
                 switch (coinSymbol.ToUpper())
                 {
-                    case "ETH":
-                        return await GetEthereumBalanceAsync(address);
                     case "BTC":
                         return await GetBitcoinBalanceAsync(address);
+                    case "ETH":
+                        return await GetEthereumBalanceAsync(address);
                     case "BSC":
                     case "BNB_BSC":
                         return await GetBinanceSmartChainBalanceAsync(address);
@@ -123,7 +123,7 @@ namespace UniversalColdWallet
             try
             {
                 // Use the TRX_TRC20AccountBalance to get the TRX balance
-                return await _trxTrcBalance.GetTrxBalance(address);
+                return await _trxTrcBalance.GetTrxBalanceAsync(address);
             }
             catch (Exception ex)
             {

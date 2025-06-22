@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 
 namespace UniversalColdWallet
 {
@@ -18,13 +19,21 @@ namespace UniversalColdWallet
             Console.WriteLine("\nOluþturulan Adresler:");
             Console.WriteLine("=====================");
 
-            foreach (var coin in export.Addresses)
+            // Get the supported symbols in their original order
+            var supportedSymbols = wallet.GetSupportedCoins();
+            
+            // Display coins in the order they appear in SupportedCoins
+            foreach (var coinSymbol in supportedSymbols)
             {
-                Console.WriteLine($"\n{coin.Key} Adresleri:");
-                foreach (var address in coin.Value)
+                // Check if the coin exists in the export addresses
+                if (export.Addresses.TryGetValue(coinSymbol, out var addresses))
                 {
-                    Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
-                    Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                    Console.WriteLine($"\n{coinSymbol} Adresleri:");
+                    foreach (var address in addresses)
+                    {
+                        Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
+                        Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                    }
                 }
             }
 
