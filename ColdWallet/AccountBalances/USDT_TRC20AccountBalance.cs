@@ -5,12 +5,12 @@ using Newtonsoft.Json.Linq;
 
 namespace ColdWallet.AccountBalances
 {
-    public class USDT_TRCAccountBalance
+    public class USDT_TRC20AccountBalance
     {
         private readonly HttpClient _httpClient;
         private const string TRONSCAN_API = "https://apilist.tronscanapi.com/api/account/tokens";
 
-        public USDT_TRCAccountBalance(HttpClient httpClient)
+        public USDT_TRC20AccountBalance(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         }

@@ -14,7 +14,8 @@ namespace UniversalColdWallet
         private readonly HttpClient _httpClient;
         private readonly Dictionary<string, string> _apiKeys;
         private readonly USDT_BSCCAccountBalance _usdtBSCBalance;
-        private readonly USDT_TRCAccountBalance _usdtTrcBalance;
+        private readonly USDT_TRC20AccountBalance _usdtTrcBalance;
+        private readonly TRX_TRC20AccountBalance _trxTrcBalance;
         private readonly ILogger<USDT_BSCCAccountBalance>? _logger;
 
         public AccountBalance(ILogger<USDT_BSCCAccountBalance>? logger = null)
@@ -39,7 +40,8 @@ namespace UniversalColdWallet
 
             // Initialize USDT balance checkers with logger
             _usdtBSCBalance = new USDT_BSCCAccountBalance(_httpClient, _apiKeys["BSCSCAN"], _logger);
-            _usdtTrcBalance = new USDT_TRCAccountBalance(_httpClient);
+            _usdtTrcBalance = new USDT_TRC20AccountBalance(_httpClient);
+            _trxTrcBalance = new TRX_TRC20AccountBalance(_httpClient);
         }
 
         public async Task<decimal> GetBalanceAsync(string coinSymbol, string address)
@@ -59,9 +61,10 @@ namespace UniversalColdWallet
                     case "USDT_BEP20":
                         return await GetUSDT_BSCBalanceAsync(address, "BSC");
                     case "BSC_USDT":
-                    case "USDT_TRC":
                     case "USDT_TRC20":
                         return await GetUSDTTRC20BalanceAsync(address, "TRC20");
+                    case "TRX_TRC20":
+                        return await GetTrxTRC20BalanceAsync(address);
                     case "TRON_USDT":
                     default:
                         throw new NotSupportedException($"Balance check for {coinSymbol} is not implemented yet.");
@@ -93,6 +96,7 @@ namespace UniversalColdWallet
                 throw new Exception($"Error getting USDT balance on {network}: {ex.Message}", ex);
             }
         }
+
         private async Task<decimal> GetUSDTTRC20BalanceAsync(string address, string network = "TRC20")
         {
             try
@@ -111,6 +115,19 @@ namespace UniversalColdWallet
             catch (Exception ex)
             {
                 throw new Exception($"Error getting USDT balance on {network}: {ex.Message}", ex);
+            }
+        }
+
+        private async Task<decimal> GetTrxTRC20BalanceAsync(string address)
+        {
+            try
+            {
+                // Use the TRX_TRC20AccountBalance to get the TRX balance
+                return await _trxTrcBalance.GetTrxBalance(address);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"Error getting TRX balance: {ex.Message}", ex);
             }
         }
 
