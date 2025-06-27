@@ -160,7 +160,9 @@ namespace UniversalColdWallet
             switch (coinType)
             {
                 case "BTC":
-                    return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, Network.Main).ToString();
+                    // For BTC, we'll return the native segwit (bech32) address by default
+                    // The other address types will be accessible through a dedicated method
+                    return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Segwit, Network.Main).ToString();
 
                 case "LTC":
                     return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, Litecoin.Instance.Mainnet).ToString();
@@ -182,6 +184,28 @@ namespace UniversalColdWallet
                 default:
                     return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, Network.Main).ToString();
             }
+        }
+
+        /// <summary>
+        /// Generates different Bitcoin address types for the same private key
+        /// </summary>
+        /// <param name="accountIndex">Account index to use (default 0)</param>
+        /// <returns>A dictionary with address types and addresses</returns>
+        public Dictionary<string, string> GetBitcoinAddressTypes(int accountIndex = 0)
+        {
+            var coinInfo = _supportedCoins.GetCoinInfo("BTC");
+            var mnemonic = new Mnemonic(_mnemonic);
+            var hdRoot = mnemonic.DeriveExtKey();
+            var keyPath = new NBitcoin.KeyPath(coinInfo.DerivationPath + "/" + accountIndex);
+            var derivedKey = hdRoot.Derive(keyPath);
+            var pubKey = derivedKey.PrivateKey.PubKey;
+            
+            return new Dictionary<string, string>
+            {
+                { "Legacy (P2PKH)", pubKey.GetAddress(ScriptPubKeyType.Legacy, Network.Main).ToString() },
+                { "Nested SegWit (P2SH-P2WPKH)", pubKey.GetAddress(ScriptPubKeyType.SegwitP2SH, Network.Main).ToString() },
+                { "Native SegWit (Bech32, P2WPKH)", pubKey.GetAddress(ScriptPubKeyType.Segwit, Network.Main).ToString() }
+            };
         }
 
         private string GenerateXRPAddress(ExtKey derivedKey)

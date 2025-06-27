@@ -394,18 +394,51 @@ namespace UniversalColdWallet
                     {
                         if (export.Addresses.TryGetValue(coinSymbol, out var addresses) && addresses != null)
                         {
-                            Console.WriteLine($"\n{coinSymbol} Adresleri ve Bakiyeleri:");
-                            foreach (var address in addresses)
+                            // Special handling for BTC to show all address types
+                            if (coinSymbol == "BTC")
                             {
-                                if (address != null)
+                                Console.WriteLine($"\nBitcoin (BTC) Adresleri ve Bakiyeleri:");
+                            
+                                foreach (var address in addresses)
                                 {
-                                    Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
-                                    Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
-                                    Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
-                                    
-                                    if (address.LastBalanceUpdate.HasValue)
+                                    if (address != null)
                                     {
-                                        Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
+                                        Console.ForegroundColor = ConsoleColor.Yellow;
+                                        Console.WriteLine($"  Index {address.Index,2}:");
+                                        Console.ResetColor();
+                                        
+                                        // Get all address types for this index
+                                        var addressTypes = wallet.GetBitcoinAddressTypes(address.Index);
+                                        
+                                        Console.WriteLine($"    Legacy (P2PKH):        {addressTypes["Legacy (P2PKH)"]}");
+                                        Console.WriteLine($"    Nested SegWit (P2SH):  {addressTypes["Nested SegWit (P2SH-P2WPKH)"]}");
+                                        Console.WriteLine($"    Native SegWit (Bech32): {addressTypes["Native SegWit (Bech32, P2WPKH)"]}");
+                                        Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                                        Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
+                                        
+                                        if (address.LastBalanceUpdate.HasValue)
+                                        {
+                                            Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
+                                        }
+                                        Console.WriteLine();
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                Console.WriteLine($"\n{coinSymbol} Adresleri ve Bakiyeleri:");
+                                foreach (var address in addresses)
+                                {
+                                    if (address != null)
+                                    {
+                                        Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
+                                        Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                                        Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
+                                        
+                                        if (address.LastBalanceUpdate.HasValue)
+                                        {
+                                            Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
+                                        }
                                     }
                                 }
                             }
