@@ -10,6 +10,7 @@ namespace UniversalColdWallet
         public required string DerivationPath { get; set; }
         public decimal Balance { get; set; }
         public DateTime? LastBalanceUpdate { get; set; }
+        public Dictionary<string, decimal>? AddressTypeBalances { get; set; } // For storing balances of different address types (BTC)
     }
 
     public class WalletExport
@@ -20,6 +21,7 @@ namespace UniversalColdWallet
         public required List<string> SupportedCoins { get; set; }
         public bool IsEncrypted { get; set; }
         public Dictionary<string, decimal> TotalBalances { get; set; } = new();
+        public Dictionary<string, Dictionary<string, decimal>> BtcAddressTypeBalances { get; set; } = new(); // For storing BTC address type balances
 
         public void UpdateTotalBalances()
         {

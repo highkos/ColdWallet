@@ -1,6 +1,9 @@
 ﻿using System;
 using System.IO;
 using System.Threading.Tasks;
+using System.Text;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace UniversalColdWallet
 {
@@ -10,7 +13,7 @@ namespace UniversalColdWallet
 
         static async Task Main(string[] args)
         {
-            await MainAsync(args);
+            await MainAsync(args).ConfigureAwait(false);
         }
 
         static async Task MainAsync(string[] args)
@@ -40,12 +43,12 @@ namespace UniversalColdWallet
                             break;
 
                         case "2":
-                            LoadExistingWallet();
+                            await LoadExistingWalletAsync().ConfigureAwait(false);
                             break;
 
                         case "3":
                             _currentWallet = SummonWallet.RecoverWalletInteractive();
-                            DisplayWalletInfo(_currentWallet);
+                            await DisplayWalletInfoAsync(_currentWallet).ConfigureAwait(false);
                             PressAnyKeyToContinue();
                             break;
 
@@ -54,7 +57,7 @@ namespace UniversalColdWallet
                             break;
 
                         case "5":
-                            await HandleBalanceCheckAsync();
+                            await HandleBalanceCheckAsync().ConfigureAwait(false);
                             break;
 
                         case "6":
@@ -97,7 +100,7 @@ namespace UniversalColdWallet
             var wallet = CreateWallet.CreateNewWallet();
 
             string filePath = "cold_wallet.json";
-            
+
             Console.WriteLine("\nCüzdanı şifrelemek istiyor musunuz? (E/H): ");
             var shouldEncrypt = Console.ReadLine()?.Trim().ToUpper() == "E";
             string? password = null;
@@ -108,9 +111,9 @@ namespace UniversalColdWallet
                 Console.WriteLine("1. Otomatik güvenli şifre oluştur");
                 Console.WriteLine("2. Manuel şifre belirle");
                 Console.Write("\nSeçiminiz (1-2): ");
-                
+
                 var choice = Console.ReadLine()?.Trim();
-                
+
                 if (choice == "1")
                 {
                     password = SetGetPassword.GenerateSecurePassword();
@@ -155,7 +158,7 @@ namespace UniversalColdWallet
             {
                 wallet.SaveToFile(filePath, password);
                 Console.WriteLine($"\nCüzdan {filePath} dosyasına kaydedildi.");
-                
+
                 if (shouldEncrypt && !string.IsNullOrEmpty(password))
                 {
                     Console.WriteLine("NOT: Cüzdan belirlenen şifre ile şifrelenmiştir.");
@@ -175,7 +178,7 @@ namespace UniversalColdWallet
             return wallet;
         }
 
-        private static void LoadExistingWallet()
+        private static async Task LoadExistingWalletAsync()
         {
             Console.Write("\nCüzdan dosya yolunu giriniz (varsayılan: cold_wallet.json): ");
             string? input = Console.ReadLine();
@@ -232,17 +235,14 @@ namespace UniversalColdWallet
                 {
                     _currentWallet = UniversalColdWallet.LoadFromFile(filePath, password);
                     Console.WriteLine("\nCüzdan başarıyla yüklendi!");
-                    
-                    // Cüzdan bilgilerini ve mnemonic'i otomatik göster
-                    DisplayWalletInfo(_currentWallet, true);
 
-                    // Şifreyi tekrar ayarla
+                    await DisplayWalletInfoAsync(_currentWallet, true).ConfigureAwait(false);
+
                     if (!string.IsNullOrEmpty(password))
                     {
                         _currentWallet.EncryptMnemonic(password);
                     }
 
-                    // Özel anahtarları göster
                     Console.WriteLine("\nÖzel anahtarlar otomatik olarak gösteriliyor...");
                     Console.WriteLine("Devam etmek için bir tuşa basın...");
                     Console.ReadKey(true);
@@ -279,13 +279,12 @@ namespace UniversalColdWallet
             PressAnyKeyToContinue();
         }
 
-        private static void DisplayWalletInfo(UniversalColdWallet wallet, bool showMnemonicAutomatically = false)
+        private static async Task DisplayWalletInfoAsync(UniversalColdWallet wallet, bool showMnemonicAutomatically = false)
         {
             ArgumentNullException.ThrowIfNull(wallet);
 
             Console.WriteLine("\n=== Cüzdan Bilgileri ===");
-            
-            // Eğer otomatik gösterim isteniyorsa veya kullanıcı onay verirse mnemonic'i göster
+
             if (showMnemonicAutomatically)
             {
                 var mnemonic = wallet.GetMnemonic();
@@ -294,7 +293,7 @@ namespace UniversalColdWallet
                     Console.WriteLine("\nMnemonic Kelimeleri:");
                     Console.WriteLine("===================");
                     var words = mnemonic.Split(' ');
-                    Console.WriteLine(string.Join(" ", words));  // Kelimeleri aralarında bir boşlukla yan yana yazdır
+                    Console.WriteLine(string.Join(" ", words));
                     Console.WriteLine("\nBu kelimeleri güvenli bir yerde saklayın!");
                     Console.WriteLine("ASLA dijital ortamda saklamayın veya başkalarıyla paylaşmayın!");
                 }
@@ -305,11 +304,10 @@ namespace UniversalColdWallet
                 Console.WriteLine("\nBu kelimeler cüzdanınızı kurtarmanızı sağlayan ana anahtardır.");
                 Console.WriteLine("Güvenli bir ortamda olduğunuzdan emin olun.");
                 Console.Write("\nMnemonic kelimelerini görmek istiyor musunuz? (E/H): ");
-                
+
                 var showMnemonic = Console.ReadLine()?.Trim().ToUpper();
                 if (showMnemonic == "E")
                 {
-                    // Şifre gerekiyorsa iste
                     if (wallet.HasPassword)
                     {
                         Console.Write("\nCüzdan şifresini giriniz: ");
@@ -323,7 +321,7 @@ namespace UniversalColdWallet
                         Console.WriteLine("\nMnemonic Kelimeleri:");
                         Console.WriteLine("===================");
                         var words = mnemonic.Split(' ');
-                        Console.WriteLine(string.Join(" ", words));  // Kelimeleri aralarında bir boşlukla yan yana yazdır
+                        Console.WriteLine(string.Join(" ", words));
                         Console.WriteLine("\nBu kelimeleri güvenli bir yerde saklayın!");
                         Console.WriteLine("ASLA dijital ortamda saklamayın veya başkalarıyla paylaşmayın!");
                     }
@@ -334,24 +332,21 @@ namespace UniversalColdWallet
             if (export != null)
             {
                 Console.WriteLine($"\nOluşturulma Tarihi: {export.CreatedAt:dd.MM.yyyy HH:mm:ss}");
-                
+
                 if (export.TotalBalances?.Count > 0)
                 {
-                    // Define the order of coins for display
-                    string[] coinOrder = new string[] 
-                    { 
-                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL", 
+                    string[] coinOrder = new string[]
+                    {
+                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL",
                         "USDT", "USDT_TRC20", "TRX_TRC20", "USDT_BEP20", "BNB_BSC",
-                        "SHIB", "XRP" 
+                        "SHIB", "XRP"
                     };
-                    
+
                     Console.WriteLine("\nToplam Bakiyeler:");
                     Console.WriteLine("================");
-                    
-                    // Create an ordered dictionary based on the defined order
+
                     var orderedBalances = new Dictionary<string, decimal>();
-                    
-                    // First add coins in our defined order
+
                     foreach (var coin in coinOrder)
                     {
                         if (export.TotalBalances.TryGetValue(coin, out decimal balance))
@@ -359,8 +354,7 @@ namespace UniversalColdWallet
                             orderedBalances[coin] = balance;
                         }
                     }
-                    
-                    // Then add any remaining coins not in our predefined order
+
                     foreach (var balance in export.TotalBalances)
                     {
                         if (!orderedBalances.ContainsKey(balance.Key))
@@ -368,11 +362,125 @@ namespace UniversalColdWallet
                             orderedBalances[balance.Key] = balance.Value;
                         }
                     }
-                    
-                    // Display the balances in the ordered dictionary
+
                     foreach (var balance in orderedBalances)
                     {
-                        Console.WriteLine($"{balance.Key,-10}: {balance.Value,15:N8}");
+                        if (balance.Key == "BTC")
+                        {
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine($"{balance.Key,-10}: {balance.Value,15:N8}");
+                            Console.ResetColor();
+
+                            try
+                            {
+                                var btcAddressTypes = wallet.GetBitcoinAddressTypes(0);
+                                var balanceChecker = new AccountBalance();
+
+                                decimal nativeBalance = 0;
+                                decimal nestedBalance = 0;
+
+                                foreach (var addressType in btcAddressTypes)
+                                {
+                                    try
+                                    {
+                                        var address = export.Addresses["BTC"].FirstOrDefault(a => a.Index == 0);
+                                        decimal addressBalance = 0;
+
+                                        if (address?.AddressTypeBalances != null &&
+                                            address.AddressTypeBalances.TryGetValue(addressType.Key, out decimal storedBalance))
+                                        {
+                                            addressBalance = storedBalance;
+                                        }
+                                        else
+                                        {
+                                            addressBalance = await balanceChecker.GetBtcBalanceAsync(addressType.Value).ConfigureAwait(false);
+                                        }
+
+                                        if (addressType.Key.Contains("Native"))
+                                        {
+                                            nativeBalance = addressBalance;
+                                        }
+                                        else if (addressType.Key.Contains("Nested"))
+                                        {
+                                            nestedBalance = addressBalance;
+                                        }
+                                    }
+                                    catch
+                                    {
+                                    }
+                                }
+
+                                Console.WriteLine($"BTC Nested: {nestedBalance,15:N8}");
+                                Console.WriteLine($"BTC Native: {nativeBalance,15:N8}");
+                            }
+                            catch
+                            {
+                            }
+                        }
+                        else if (balance.Key == "LTC")
+                        {
+                            Console.ForegroundColor = ConsoleColor.Cyan;
+                            Console.WriteLine($"{balance.Key,-10}: {balance.Value,15:N8}");
+                            Console.ResetColor();
+
+                            try
+                            {
+                                var ltcAddressTypes = GetLitecoinAddressTypes(wallet, 0);
+                                var balanceChecker = new AccountBalance();
+
+                                decimal nativeBalance = 0;
+                                decimal nestedBalance = 0;
+
+                                foreach (var addressType in ltcAddressTypes)
+                                {
+                                    try
+                                    {
+                                        var address = export.Addresses["LTC"].FirstOrDefault(a => a.Index == 0);
+                                        decimal addressBalance = 0;
+
+                                        if (address?.AddressTypeBalances != null &&
+                                            address.AddressTypeBalances.TryGetValue(addressType.Key, out decimal storedBalance))
+                                        {
+                                            addressBalance = storedBalance;
+                                        }
+                                        else
+                                        {
+                                            // LTC için actual balance sorgulaması yapalım
+                                            try
+                                            {
+                                                addressBalance = await balanceChecker.GetLtcBalanceAsync(addressType.Value).ConfigureAwait(false);
+                                            }
+                                            catch
+                                            {
+                                                addressBalance = 0; // API hatası varsa 0 olarak ayarla
+                                            }
+                                        }
+
+                                        if (addressType.Key.Contains("Native"))
+                                        {
+                                            nativeBalance = addressBalance;
+                                        }
+                                        else if (addressType.Key.Contains("Nested"))
+                                        {
+                                            nestedBalance = addressBalance;
+                                        }
+                                    }
+                                    catch
+                                    {
+                                    }
+                                }
+
+                                Console.WriteLine($"LTC Nested: {nestedBalance,15:N8}");
+                                Console.WriteLine($"LTC Native: {nativeBalance,15:N8}");
+                            }
+                            catch
+                            {
+                            }
+                        }
+                        else
+                        {
+                            Console.WriteLine($"{balance.Key,-10}: {balance.Value,15:N8}");
+                        }
                     }
                 }
 
@@ -381,24 +489,21 @@ namespace UniversalColdWallet
 
                 if (export.Addresses != null)
                 {
-                    // Use the same coin order for displaying addresses
-                    string[] coinOrder = new string[] 
-                    { 
-                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL", 
+                    string[] coinOrder = new string[]
+                    {
+                        "BTC", "ETH", "LTC", "BCH", "DOGE", "ADA", "SOL",
                         "USDT", "USDT_TRC20", "TRX_TRC20", "USDT_BEP20", "BNB_BSC",
-                        "SHIB", "XRP" 
+                        "SHIB", "XRP"
                     };
 
-                    // First display the coins in our defined order
                     foreach (var coinSymbol in coinOrder)
                     {
                         if (export.Addresses.TryGetValue(coinSymbol, out var addresses) && addresses != null)
                         {
-                            // Special handling for BTC to show all address types
                             if (coinSymbol == "BTC")
                             {
                                 Console.WriteLine($"\nBitcoin (BTC) Adresleri ve Bakiyeleri:");
-                            
+
                                 foreach (var address in addresses)
                                 {
                                     if (address != null)
@@ -406,16 +511,51 @@ namespace UniversalColdWallet
                                         Console.ForegroundColor = ConsoleColor.Yellow;
                                         Console.WriteLine($"  Index {address.Index,2}:");
                                         Console.ResetColor();
-                                        
-                                        // Get all address types for this index
+
                                         var addressTypes = wallet.GetBitcoinAddressTypes(address.Index);
-                                        
+
                                         Console.WriteLine($"    Legacy (P2PKH):        {addressTypes["Legacy (P2PKH)"]}");
                                         Console.WriteLine($"    Nested SegWit (P2SH):  {addressTypes["Nested SegWit (P2SH-P2WPKH)"]}");
                                         Console.WriteLine($"    Native SegWit (Bech32): {addressTypes["Native SegWit (Bech32, P2WPKH)"]}");
                                         Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
-                                        Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
-                                        
+                                        Console.WriteLine($"    Toplam Bakiye: {address.Balance,15:N8} {coinSymbol}");
+
+                                        if (address.AddressTypeBalances != null && address.AddressTypeBalances.Count > 0)
+                                        {
+                                            foreach (var typeBalance in address.AddressTypeBalances)
+                                            {
+                                                if (typeBalance.Value > 0)
+                                                {
+                                                    string typeName = typeBalance.Key.Split(' ')[0];
+                                                    Console.WriteLine($"      • {typeName,-6} Bakiye: {typeBalance.Value,10:N8} BTC");
+                                                }
+                                            }
+                                        }
+
+                                        if (address.LastBalanceUpdate.HasValue)
+                                        {
+                                            Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
+                                        }
+                                        Console.WriteLine();
+                                    }
+                                }
+                            }
+                            else if (coinSymbol == "LTC")
+                            {
+                                Console.WriteLine($"\nLitecoin (LTC) Adresleri ve Bakiyeleri:");
+                                foreach (var address in addresses)
+                                {
+                                    if (address != null)
+                                    {
+                                        Console.ForegroundColor = ConsoleColor.Cyan;
+                                        Console.WriteLine($"  Index {address.Index,2}:");
+                                        Console.ResetColor();
+                                        var ltcAddressTypes = GetLitecoinAddressTypes(wallet, address.Index);
+                                        Console.WriteLine($"    Legacy (P2PKH):        {ltcAddressTypes["Legacy (P2PKH)"]}");
+                                        Console.WriteLine($"    Nested SegWit (P2SH):  {ltcAddressTypes["Nested SegWit (P2SH-P2WPKH)"]}");
+                                        Console.WriteLine($"    Native SegWit (Bech32): {ltcAddressTypes["Native SegWit (Bech32, P2WPKH)"]}");
+                                        Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
+                                        Console.WriteLine($"    Toplam Bakiye: {address.Balance,15:N8} {coinSymbol}");
                                         if (address.LastBalanceUpdate.HasValue)
                                         {
                                             Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
@@ -434,7 +574,7 @@ namespace UniversalColdWallet
                                         Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
                                         Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
                                         Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coinSymbol}");
-                                        
+
                                         if (address.LastBalanceUpdate.HasValue)
                                         {
                                             Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
@@ -444,8 +584,7 @@ namespace UniversalColdWallet
                             }
                         }
                     }
-                    
-                    // Then display any remaining coins not in our predefined order
+
                     foreach (var coin in export.Addresses)
                     {
                         if (!coinOrder.Contains(coin.Key) && coin.Value != null)
@@ -458,7 +597,7 @@ namespace UniversalColdWallet
                                     Console.WriteLine($"  Index {address.Index,2}: {address.Address}");
                                     Console.WriteLine($"    Derivation Path: {address.DerivationPath}");
                                     Console.WriteLine($"    Bakiye: {address.Balance,15:N8} {coin.Key}");
-                                    
+
                                     if (address.LastBalanceUpdate.HasValue)
                                     {
                                         Console.WriteLine($"    Son Güncelleme: {address.LastBalanceUpdate:dd.MM.yyyy HH:mm:ss}");
@@ -466,35 +605,6 @@ namespace UniversalColdWallet
                                 }
                             }
                         }
-                    }
-                }
-            }
-        }
-
-        private static void CreateAndDisplayAddresses(UniversalColdWallet wallet)
-        {
-            ArgumentNullException.ThrowIfNull(wallet);
-
-            Console.WriteLine("\n=== Coin Adresleri ===");
-            var coins = wallet.GetSupportedCoins();
-            if (coins != null)
-            {
-                foreach (var coin in coins)
-                {
-                    try
-                    {
-                        if (!string.IsNullOrEmpty(coin))
-                        {
-                            var address = wallet.GenerateAddress(coin, 0);
-                            if (!string.IsNullOrEmpty(address))
-                            {
-                                Console.WriteLine($"{coin,-10}: {address}");
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Console.WriteLine($"{coin,-10}: Hata - {ex.Message}");
                     }
                 }
             }
@@ -530,9 +640,9 @@ namespace UniversalColdWallet
                             Console.WriteLine("1. Otomatik güvenli şifre oluştur");
                             Console.WriteLine("2. Manuel şifre belirle");
                             Console.Write("\nSeçiminiz (1-2): ");
-                            
+
                             var passwordChoice = Console.ReadLine()?.Trim();
-                            
+
                             if (passwordChoice == "1")
                             {
                                 newPassword = SetGetPassword.GenerateSecurePassword();
@@ -638,7 +748,7 @@ namespace UniversalColdWallet
                 {
                     case "1":
                         Console.WriteLine("\nBakiyeler güncelleniyor, lütfen bekleyin...");
-                        
+
                         var oldBalances = new Dictionary<string, decimal>();
                         var coins = _currentWallet.GetSupportedCoins();
                         foreach (var coin in coins)
@@ -646,8 +756,67 @@ namespace UniversalColdWallet
                             oldBalances[coin] = _currentWallet.GetBalance(coin, 0);
                         }
 
-                        await balanceChecker.UpdateWalletBalancesAsync(_currentWallet);
-                        
+                        if (_currentWallet.GetSupportedCoins().Contains("BTC"))
+                        {
+                            Console.WriteLine("\nBitcoin adresleri kontrol ediliyor...");
+                            var btcAddressTypes = _currentWallet.GetBitcoinAddressTypes(0);
+
+                            Console.ForegroundColor = ConsoleColor.Yellow;
+                            Console.WriteLine("\nBitcoin Adresleri Bakiyeleri:");
+                            Console.ResetColor();
+
+                            decimal totalBtcBalance = 0;
+                            var addressBalances = new Dictionary<string, decimal>();
+
+                            foreach (var item in btcAddressTypes)
+                            {
+                                string addressType = item.Key;
+                                string btcAddress = item.Value;
+                                string shortType = addressType.Split(' ')[0];
+
+                                try
+                                {
+                                    decimal addressBalance = await balanceChecker.GetBtcBalanceAsync(btcAddress).ConfigureAwait(false);
+                                    totalBtcBalance += addressBalance;
+                                    addressBalances[addressType] = addressBalance;
+                                    Console.WriteLine($"{shortType,-10}: {addressBalance,15:N8} BTC  ({btcAddress})");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($"{shortType,-10}: Bakiye sorgulanamadı - {ex.Message.Split('.')[0]}");
+                                    addressBalances[addressType] = 0;
+                                }
+                            }
+
+                            var btcAddressInfo = _currentWallet.ExportWallet().Addresses["BTC"].FirstOrDefault(a => a.Index == 0);
+                            if (btcAddressInfo != null)
+                            {
+                                if (btcAddressInfo.AddressTypeBalances == null)
+                                    btcAddressInfo.AddressTypeBalances = new Dictionary<string, decimal>();
+
+                                foreach (var balance in addressBalances)
+                                {
+                                    btcAddressInfo.AddressTypeBalances[balance.Key] = balance.Value;
+                                }
+                            }
+
+                            Console.WriteLine($"\nToplam BTC: {totalBtcBalance,15:N8} BTC");
+                            var dictionary = new Dictionary<int, decimal>
+                            {
+                                { 0, totalBtcBalance }
+                            };
+
+                            var btcBalances = new Dictionary<string, Dictionary<int, decimal>>
+                            {
+                                { "BTC", dictionary }
+                            };
+
+                            _currentWallet.UpdateAllBalances(btcBalances);
+                            Console.WriteLine("Bitcoin bakiyeleri güncellendi.");
+                        }
+
+                        await balanceChecker.UpdateWalletBalancesAsync(_currentWallet).ConfigureAwait(false);
+
                         bool hasChanges = false;
                         Console.WriteLine("\nBakiye Değişiklikleri:");
                         Console.WriteLine("====================");
@@ -656,7 +825,7 @@ namespace UniversalColdWallet
                             var newBalance = _currentWallet.GetBalance(coin, 0);
                             var oldBalance = oldBalances[coin];
                             var change = newBalance - oldBalance;
-                            
+
                             if (change != 0)
                             {
                                 hasChanges = true;
@@ -666,11 +835,11 @@ namespace UniversalColdWallet
                         }
 
                         Console.WriteLine(hasChanges ? "\nBakiyeler başarıyla güncellendi!" : "\nGüncellenecek bakiye değişikliği yok.");
-                        DisplayWalletInfo(_currentWallet, true); // showMnemonicAutomatically parametresi true olarak eklendi
+                        await DisplayWalletInfoAsync(_currentWallet, true).ConfigureAwait(false);
                         break;
 
                     case "2":
-                        await UpdateSingleCoinBalanceAsync(balanceChecker);
+                        await UpdateSingleCoinBalanceAsync(balanceChecker).ConfigureAwait(false);
                         break;
 
                     case "3":
@@ -692,7 +861,7 @@ namespace UniversalColdWallet
         private static async Task UpdateSingleCoinBalanceAsync(AccountBalance balanceChecker)
         {
             var coins = _currentWallet!.GetSupportedCoins();
-            
+
             Console.WriteLine("\nDesteklenen Coinler:");
             for (int i = 0; i < coins.Count; i++)
             {
@@ -708,25 +877,146 @@ namespace UniversalColdWallet
                 try
                 {
                     Console.WriteLine("API'ye bağlanılıyor...");
-                    
+
                     var address = _currentWallet.GenerateAddress(selectedCoin, 0);
                     Console.WriteLine($"Adres: {address}");
                     Console.WriteLine("Bakiye sorgulanıyor...");
 
-                    var balance = await balanceChecker.GetBalanceAsync(selectedCoin, address);
-                    var oldBalance = _currentWallet.GetBalance(selectedCoin, 0);
-
-                    Console.WriteLine($"Eski Bakiye: {oldBalance:N8} {selectedCoin}");
-                    _currentWallet.UpdateBalance(selectedCoin, 0, balance);
-
-                    Console.WriteLine($"\n{selectedCoin} bakiyesi başarıyla güncellendi!");
-                    Console.WriteLine($"Yeni Bakiye: {balance:N8} {selectedCoin}");
-
-                    var change = balance - oldBalance;
-                    if (change != 0)
+                    if (selectedCoin.ToUpper() == "BTC")
                     {
-                        var changeSymbol = change > 0 ? "+" : "";
-                        Console.WriteLine($"Değişim: {changeSymbol}{change:N8} {selectedCoin}");
+                        var btcAddressTypes = _currentWallet.GetBitcoinAddressTypes(0);
+                        var oldBalance = _currentWallet.GetBalance(selectedCoin, 0);
+                        decimal totalBalance = 0;
+
+                        Console.WriteLine("\nBitcoin bakiyeleri kontrol ediliyor...");
+
+                        Console.ForegroundColor = ConsoleColor.Yellow;
+                        Console.WriteLine("\nBitcoin Adresleri Bakiyeleri:");
+                        Console.ResetColor();
+
+                        var addressBalances = new Dictionary<string, decimal>();
+
+                        foreach (var item in btcAddressTypes)
+                        {
+                            string addressType = item.Key;
+                            string btcAddress = item.Value;
+                            string shortType = addressType.Split(' ')[0];
+
+                            try
+                            {
+                                decimal addressBalance = await balanceChecker.GetBtcBalanceAsync(btcAddress).ConfigureAwait(false);
+                                totalBalance += addressBalance;
+                                addressBalances[addressType] = addressBalance;
+                                Console.WriteLine($"{shortType,-10}: {addressBalance,15:N8} BTC  ({btcAddress})");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"{shortType,-10}: Bakiye sorgulanamadı - {ex.Message.Split('.')[0]}");
+                                addressBalances[addressType] = 0;
+                            }
+                        }
+
+                        Console.WriteLine($"\nToplam BTC: {totalBalance,15:N8} BTC");
+
+                        var change = totalBalance - oldBalance;
+                        if (change != 0)
+                        {
+                            var changeSymbol = change > 0 ? "+" : "";
+                            Console.WriteLine($"Değişim: {changeSymbol}{change:N8} BTC");
+                        }
+
+                        var btcAddressInfo = _currentWallet.ExportWallet().Addresses["BTC"].FirstOrDefault(a => a.Index == 0);
+                        if (btcAddressInfo != null)
+                        {
+                            if (btcAddressInfo.AddressTypeBalances == null)
+                                btcAddressInfo.AddressTypeBalances = new Dictionary<string, decimal>();
+
+                            foreach (var balance in addressBalances)
+                            {
+                                btcAddressInfo.AddressTypeBalances[balance.Key] = balance.Value;
+                            }
+                        }
+
+                        _currentWallet.UpdateBalance(selectedCoin, 0, totalBalance);
+
+                        Console.WriteLine($"\n{selectedCoin} bakiyesi başarıyla güncellendi!");
+                    }
+                    else if (selectedCoin.ToUpper() == "LTC")
+                    {
+                        var ltcAddressTypes = GetLitecoinAddressTypes(_currentWallet, 0);
+                        var oldBalance = _currentWallet.GetBalance(selectedCoin, 0);
+                        decimal totalBalance = 0;
+
+                        Console.WriteLine("\nLitecoin bakiyeleri kontrol ediliyor...");
+
+                        Console.ForegroundColor = ConsoleColor.Cyan;
+                        Console.WriteLine("\nLitecoin Adresleri Bakiyeleri:");
+                        Console.ResetColor();
+
+                        var addressBalances = new Dictionary<string, decimal>();
+
+                        foreach (var item in ltcAddressTypes)
+                        {
+                            string addressType = item.Key;
+                            string ltcAddress = item.Value;
+                            string shortType = addressType.Split(' ')[0];
+
+                            try
+                            {
+                                decimal addressBalance = await balanceChecker.GetLtcBalanceAsync(ltcAddress).ConfigureAwait(false);
+                                totalBalance += addressBalance;
+                                addressBalances[addressType] = addressBalance;
+                                Console.WriteLine($"{shortType,-10}: {addressBalance,15:N8} LTC  ({ltcAddress})");
+                            }
+                            catch (Exception ex)
+                            {
+                                Console.WriteLine($"{shortType,-10}: Bakiye sorgulanamadı - {ex.Message.Split('.')[0]}");
+                                addressBalances[addressType] = 0;
+                            }
+                        }
+
+                        Console.WriteLine($"\nToplam LTC: {totalBalance,15:N8} LTC");
+
+                        var change = totalBalance - oldBalance;
+                        if (change != 0)
+                        {
+                            var changeSymbol = change > 0 ? "+" : "";
+                            Console.WriteLine($"Değişim: {changeSymbol}{change:N8} LTC");
+                        }
+
+                        var ltcAddressInfo = _currentWallet.ExportWallet().Addresses["LTC"].FirstOrDefault(a => a.Index == 0);
+                        if (ltcAddressInfo != null)
+                        {
+                            if (ltcAddressInfo.AddressTypeBalances == null)
+                                ltcAddressInfo.AddressTypeBalances = new Dictionary<string, decimal>();
+
+                            foreach (var balance in addressBalances)
+                            {
+                                ltcAddressInfo.AddressTypeBalances[balance.Key] = balance.Value;
+                            }
+                        }
+
+                        _currentWallet.UpdateBalance(selectedCoin, 0, totalBalance);
+
+                        Console.WriteLine($"\n{selectedCoin} bakiyesi başarıyla güncellendi!");
+                    }
+                    else
+                    {
+                        var balance = await balanceChecker.GetBalanceAsync(selectedCoin, address).ConfigureAwait(false);
+                        var oldBalance = _currentWallet.GetBalance(selectedCoin, 0);
+
+                        Console.WriteLine($"Eski Bakiye: {oldBalance:N8} {selectedCoin}");
+                        _currentWallet.UpdateBalance(selectedCoin, 0, balance);
+
+                        Console.WriteLine($"\n{selectedCoin} bakiyesi başarıyla güncellendi!");
+                        Console.WriteLine($"Yeni Bakiye: {balance:N8} {selectedCoin}");
+
+                        var change = balance - oldBalance;
+                        if (change != 0)
+                        {
+                            var changeSymbol = change > 0 ? "+" : "";
+                            Console.WriteLine($"Değişim: {changeSymbol}{change:N8} {selectedCoin}");
+                        }
                     }
 
                     var lastUpdate = _currentWallet.GetLastBalanceUpdate(selectedCoin, 0);
@@ -735,9 +1025,8 @@ namespace UniversalColdWallet
                         Console.WriteLine($"Son Güncelleme: {lastUpdate.Value:dd.MM.yyyy HH:mm:ss}");
                     }
 
-                    // Tam cüzdan bilgilerini göster
                     Console.WriteLine("\nGüncel cüzdan bilgileri gösteriliyor...");
-                    DisplayWalletInfo(_currentWallet, true);
+                    await DisplayWalletInfoAsync(_currentWallet, true).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
@@ -787,6 +1076,139 @@ namespace UniversalColdWallet
         {
             Console.WriteLine("\nDevam etmek için bir tuşa basın...");
             Console.ReadKey();
+        }
+
+        private static Dictionary<string, string> GetLitecoinAddressTypes(UniversalColdWallet wallet, int accountIndex)
+        {
+            var coinInfo = new SupportedCoins().GetCoinInfo("LTC");
+            var mnemonic = new NBitcoin.Mnemonic(wallet.GetMnemonic());
+            var hdRoot = mnemonic.DeriveExtKey();
+            var keyPath = new NBitcoin.KeyPath(coinInfo.DerivationPath + "/" + accountIndex);
+            var derivedKey = hdRoot.Derive(keyPath);
+            var pubKey = derivedKey.PrivateKey.PubKey;
+
+            var pubKeyHash = pubKey.Hash.ToBytes();
+            var nativeBech32 = GenerateLitecoinBech32Address(pubKeyHash);
+
+            return new Dictionary<string, string>
+            {
+                { "Legacy (P2PKH)", pubKey.GetAddress(NBitcoin.ScriptPubKeyType.Legacy, NBitcoin.Altcoins.Litecoin.Instance.Mainnet).ToString() },
+                { "Nested SegWit (P2SH-P2WPKH)", pubKey.GetAddress(NBitcoin.ScriptPubKeyType.SegwitP2SH, NBitcoin.Altcoins.Litecoin.Instance.Mainnet).ToString() },
+                { "Native SegWit (Bech32, P2WPKH)", nativeBech32 }
+            };
+        }
+
+        private static string GenerateLitecoinBech32Address(byte[] pubKeyHash)
+        {
+            if (pubKeyHash.Length != 20)
+                throw new ArgumentException("Public key hash must be 20 bytes", nameof(pubKeyHash));
+
+            const string hrp = "ltc";
+            const int witnessVersion = 0;
+
+            var converted = ConvertBitsToBase32(pubKeyHash, 8, 5, true);
+
+            var spec = new List<int> { witnessVersion };
+            spec.AddRange(converted);
+
+            var checksum = CalculateBech32Checksum(hrp, spec);
+
+            var combined = spec.Concat(checksum).ToArray();
+
+            const string charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+            var result = new StringBuilder(hrp + "1");
+
+            foreach (var value in combined)
+            {
+                if (value < 0 || value >= charset.Length)
+                    throw new InvalidOperationException($"Invalid character value: {value}");
+                result.Append(charset[value]);
+            }
+
+            return result.ToString();
+        }
+
+        private static List<int> ConvertBitsToBase32(byte[] data, int fromBits, int toBits, bool pad)
+        {
+            var result = new List<int>();
+            int acc = 0;
+            int bits = 0;
+            int maxv = (1 << toBits) - 1;
+            int maxAcc = (1 << (fromBits + toBits - 1)) - 1;
+
+            foreach (byte value in data)
+            {
+                if (value < 0 || (value >> fromBits) != 0)
+                    throw new ArgumentException("Invalid input data for base conversion");
+
+                acc = ((acc << fromBits) | value) & maxAcc;
+                bits += fromBits;
+
+                while (bits >= toBits)
+                {
+                    bits -= toBits;
+                    result.Add((acc >> bits) & maxv);
+                }
+            }
+
+            if (pad)
+            {
+                if (bits > 0)
+                    result.Add((acc << (toBits - bits)) & maxv);
+            }
+            else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv) != 0)
+            {
+                throw new ArgumentException("Invalid padding bits");
+            }
+
+            return result;
+        }
+
+        private static List<int> CalculateBech32Checksum(string hrp, List<int> data)
+        {
+            var values = new List<int>();
+
+            foreach (char c in hrp)
+                values.Add(c >> 5);
+
+            values.Add(0);
+
+            foreach (char c in hrp)
+                values.Add(c & 31);
+
+            values.AddRange(data);
+
+            values.AddRange(Enumerable.Repeat(0, 6));
+
+            uint polymod = CalculateBech32Polymod(values) ^ 1;
+
+            var checksum = new List<int>();
+            for (int i = 0; i < 6; i++)
+            {
+                checksum.Add((int)((polymod >> (5 * (5 - i))) & 31));
+            }
+
+            return checksum;
+        }
+
+        private static uint CalculateBech32Polymod(List<int> values)
+        {
+            uint[] generator = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
+            uint chk = 1;
+
+            foreach (int value in values)
+            {
+                uint top = chk >> 25;
+                chk = (chk & 0x1ffffff) << 5 ^ (uint)value;
+
+                for (int i = 0; i < 5; i++)
+                {
+                    if (((top >> i) & 1) == 1)
+                        chk ^= generator[i];
+                }
+            }
+
+            return chk;
         }
     }
 }

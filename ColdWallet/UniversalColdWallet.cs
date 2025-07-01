@@ -165,7 +165,9 @@ namespace UniversalColdWallet
                     return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Segwit, Network.Main).ToString();
 
                 case "LTC":
-                    return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, Litecoin.Instance.Mainnet).ToString();
+                    // LTC için kendi Bech32 implementasyonumuzu kullan
+                    var pubKeyHash = derivedKey.PrivateKey.PubKey.Hash.ToBytes();
+                    return GenerateLitecoinBech32Address(pubKeyHash);
 
                 case "BCH":
                     var bchAddress = derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, BCash.Instance.Mainnet);
@@ -184,6 +186,148 @@ namespace UniversalColdWallet
                 default:
                     return derivedKey.PrivateKey.PubKey.GetAddress(ScriptPubKeyType.Legacy, Network.Main).ToString();
             }
+        }
+
+        /// <summary>
+        /// Generates a proper Litecoin Bech32 address according to BIP 173
+        /// Based on reference implementation from bitcoin/bech32
+        /// </summary>
+        /// <param name="pubKeyHash">20-byte public key hash</param>
+        /// <returns>Litecoin Bech32 address starting with "ltc1"</returns>
+        private static string GenerateLitecoinBech32Address(byte[] pubKeyHash)
+        {
+            if (pubKeyHash.Length != 20)
+                throw new ArgumentException("Public key hash must be 20 bytes", nameof(pubKeyHash));
+
+            const string hrp = "ltc";
+            const int witnessVersion = 0;
+
+            // Convert the 20-byte hash to 5-bit groups
+            var converted = ConvertBitsToBase32(pubKeyHash, 8, 5, true);
+            
+            // Create spec: version + converted data
+            var spec = new List<int> { witnessVersion };
+            spec.AddRange(converted);
+
+            // Calculate bech32 checksum
+            var checksum = CalculateBech32Checksum(hrp, spec);
+            
+            // Combine all parts
+            var combined = spec.Concat(checksum).ToArray();
+
+            // Encode to bech32 string
+            const string charset = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
+            var result = new StringBuilder(hrp + "1");
+            
+            foreach (var value in combined)
+            {
+                if (value < 0 || value >= charset.Length)
+                    throw new InvalidOperationException($"Invalid character value: {value}");
+                result.Append(charset[value]);
+            }
+
+            return result.ToString();
+        }
+
+        /// <summary>
+        /// Convert bits from one base to another (reference implementation)
+        /// </summary>
+        private static List<int> ConvertBitsToBase32(byte[] data, int fromBits, int toBits, bool pad)
+        {
+            var result = new List<int>();
+            int acc = 0;
+            int bits = 0;
+            int maxv = (1 << toBits) - 1;
+            int maxAcc = (1 << (fromBits + toBits - 1)) - 1;
+
+            foreach (byte value in data)
+            {
+                if (value < 0 || (value >> fromBits) != 0)
+                    throw new ArgumentException("Invalid input data for base conversion");
+                    
+                acc = ((acc << fromBits) | value) & maxAcc;
+                bits += fromBits;
+                
+                while (bits >= toBits)
+                {
+                    bits -= toBits;
+                    result.Add((acc >> bits) & maxv);
+                }
+            }
+
+            if (pad)
+            {
+                if (bits > 0)
+                    result.Add((acc << (toBits - bits)) & maxv);
+            }
+            else if (bits >= fromBits || ((acc << (toBits - bits)) & maxv) != 0)
+            {
+                throw new ArgumentException("Invalid padding bits");
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Calculate Bech32 checksum according to BIP 173 reference
+        /// </summary>
+        private static List<int> CalculateBech32Checksum(string hrp, List<int> data)
+        {
+            // HRP expansion: high bits + [0] + low bits
+            var values = new List<int>();
+            
+            // High 3 bits of each character
+            foreach (char c in hrp)
+                values.Add(c >> 5);
+            
+            // Separator
+            values.Add(0);
+            
+            // Low 5 bits of each character  
+            foreach (char c in hrp)
+                values.Add(c & 31);
+            
+            // Add the data
+            values.AddRange(data);
+            
+            // Add 6 zero bytes for checksum space
+            values.AddRange(Enumerable.Repeat(0, 6));
+            
+            // Calculate polymod
+            uint polymod = CalculateBech32PolymodForLTC(values) ^ 1;
+            
+            // Extract 6 5-bit checksum values
+            var checksum = new List<int>();
+            for (int i = 0; i < 6; i++)
+            {
+                checksum.Add((int)((polymod >> (5 * (5 - i))) & 31));
+            }
+            
+            return checksum;
+        }
+
+        /// <summary>
+        /// Bech32 polymod calculation (reference implementation)
+        /// </summary>
+        private static uint CalculateBech32PolymodForLTC(List<int> values)
+        {
+            // Generator polynomial constants for bech32
+            uint[] generator = { 0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3 };
+            uint chk = 1;
+            
+            foreach (int value in values)
+            {
+                uint top = chk >> 25;
+                chk = (chk & 0x1ffffff) << 5 ^ (uint)value;
+                
+                for (int i = 0; i < 5; i++)
+                {
+                    if (((top >> i) & 1) == 1)
+                        chk ^= generator[i];
+                }
+            }
+            
+            return chk;
         }
 
         /// <summary>
